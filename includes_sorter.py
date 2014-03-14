@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 
-# TODO: Keep self .h file header on top!
-
 import argparse
 import os
 import re
@@ -22,33 +20,56 @@ if not os.path.isdir (srcRoot):
 filenameMask = re.compile (r'.*\.(h|hpp|c|cpp|php)$')
 
 class GroupProperties:
-  def __init__ (self, name, regex, sort, keepVSpace, keepDup):
+  NORMAL = 0
+  EMPTY = 1
+  MY_HEADER = 2
+  def __init__ (self, groupType, name, regex, sort, keepVSpace, keepDup):
+    self.groupType = groupType
     self.name = name
     self.regex = re.compile (regex)
     self.sort = sort
     self.keepVSpace = keepVSpace
     self.keepDup = keepDup
     self.checkRules ()
+  def setId (self, groupId):
+    self.groupId = groupId
+  def isEmpty (self):
+    return self.groupType == self.EMPTY
   def checkRules (self):
-    if self.sort and self.keepVSpace:
-      raise RuntimeError ('sort and keepVSpace rules are incompatible')
+    if self.groupType == self.NORMAL:
+      if self.sort and self.keepVSpace:
+        raise RuntimeError ('sort and keepVSpace rules are incompatible')
+  def matches (self, line, filename):
+    if self.groupType == self.NORMAL:
+      return re.match (self.regex, line)
+    elif self.groupType == self.EMPTY:
+      return line.isspace ()
+    elif self.groupType == self.MY_HEADER:
+      return re.match (r' *# *include *".*\b{0}\.h"'.format (os.path.splitext (filename)[0]), line)
+  def greedyMatch (self):
+    return self.groupType == self.MY_HEADER
 
-groupProperties = [GroupProperties ('Empty', r' *$'                       , False, False, False),
-                   GroupProperties ('C'    , r' *# *include *<.+\.h>'     , True , False, False),
-                   GroupProperties ('C++'  , r' *# *include *<[a-z_0-9]+>', True , False, False),
-                   GroupProperties ('Qt'   , r' *# *include *<Q.+>'       , True , False, False),
-                   GroupProperties ('Local', r' *# *include *".*"'        , False, True , False)]
+groupProperties = [GroupProperties (GroupProperties.EMPTY     , 'Empty'   , r''                          , False, False, False),
+                   GroupProperties (GroupProperties.MY_HEADER , 'MyHeader', r''                          , False, False, False),
+                   GroupProperties (GroupProperties.NORMAL    , 'CStd'    , r' *# *include *<.+\.h>'     , True , False, False),
+                   GroupProperties (GroupProperties.NORMAL    , 'C++Std'  , r' *# *include *<[a-z_0-9]+>', True , False, False),
+                   GroupProperties (GroupProperties.NORMAL    , 'Qt'      , r' *# *include *<Q.+>'       , True , False, False),
+                   GroupProperties (GroupProperties.NORMAL    , 'Local'   , r' *# *include *".*"'        , False, True , False)]
 
-emptyGroupId = 0
+for iGroup, props in enumerate (groupProperties):
+  props.setId (iGroup)
+
 anyIncludeRegex = re.compile (r' *# *include')
 
-def classifyLine (line):
+def classifyLine (line, filename):
   matchingGroup = None
-  for iGroup, props in enumerate (groupProperties):
-    if re.match (props.regex, line):
+  for props in groupProperties:
+    if props.matches (line, filename):
+      if props.greedyMatch ():
+        return props
       if matchingGroup != None:
-        raise RuntimeError ('Line \n' + line + '\n matches both "' + matchingGroup + '" and "' + str (i) + '" rules')
-      matchingGroup = iGroup
+        raise RuntimeError ('Line \n' + line + ' matches both "' + matchingGroup.name + '" and "' + props.name + '" rules')
+      matchingGroup = props
   return matchingGroup
 
 class Group:
@@ -75,10 +96,9 @@ class Chunk:
     self.trailingEmptyLines = 0
     self.groups = [Group (props) for props in groupProperties]
   def addLine (self, line, lineGroup):
-    isEmpty = (lineGroup == emptyGroupId)
-    if not isEmpty:
+    if not lineGroup.isEmpty ():
       chunk.trailingEmptyLines = 0
-      chunk.groups[lineGroup].addLine (line)
+      chunk.groups[lineGroup.groupId].addLine (line)
     else:
       for gr in self.groups:
         gr.addEmptyLine ()
@@ -105,12 +125,11 @@ for root, dirs, files in os.walk (srcRoot):
       newContent = []
       chunk = None
       for line in oldContent:
-        lineGroup = classifyLine (line)
+        lineGroup = classifyLine (line, relname)
         isMatch = (lineGroup != None)
-        isEmpty = (lineGroup == emptyGroupId)
         if lineGroup == None and re.match (anyIncludeRegex, line):
-          raise RuntimeError ('Line \n' + line + '\n contains an #include, but doesn\'t match any known include group')
-        if isMatch and (chunk or not isEmpty):
+          raise RuntimeError ('Line \n' + line + ' contains an #include, but doesn\'t match any known include group')
+        if isMatch and (chunk or not lineGroup.isEmpty ()):
           if not chunk:
             chunk = Chunk ()
           chunk.addLine (line, lineGroup)
