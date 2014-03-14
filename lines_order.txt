@@ -1,0 +1,9 @@
+sort-smart: *# *include *<.+\.h>.*
+blank
+sort-smart: *# *include *<[a-z_0-9]+>.*
+blank
+sort-smart: *# *include *<Q.+>.*
+blank
+sort-none, vs-keep: *# *include *".*".*
+
+must-match: #include.*
