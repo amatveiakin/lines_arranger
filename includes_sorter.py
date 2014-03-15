@@ -141,6 +141,8 @@ for root, dirs, files in os.walk (srcRoot):
             newContent += chunk.printChunk ()
             chunk = None
           newContent.append (line)
+      if chunk:
+        newContent += chunk.printChunk ()
       f.close ()
       try:
         f = open (filename, 'w')
