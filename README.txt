@@ -1,3 +1,16 @@
+LinesArranger
+=============
+
+A tool to arrange lines in text files.
+
+Currently, it only sortes #include directives in C/C++ code. The plan is to make
+it able to arrange lines in files of any format, according to given rules.
+
+
+
+
+### Rules draft (for future versions)
+
 TODO: There must be a way to file base name in a rule (to force #include "my_header.h" on top)
 
 === match options (separated by comma)
