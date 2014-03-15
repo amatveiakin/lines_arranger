@@ -150,5 +150,6 @@ for root, dirs, files in os.walk (srcRoot):
         print (' File "{0}" is locked for writing'.format (filename))
     except RuntimeError as err:
       print (' ERROR in file "{0}":\n{1}'.format (filename, err))
-    except:
-      print (' Unknown ERROR in file "{0}"'.format (filename))
+    except Exception as ex:
+      print (' Unknown ERROR in file "{0}":'.format (filename))
+      raise ex
